@@ -38,11 +38,11 @@ void compute_fn1(double* A, double* B, double* C) { // Explicit vectorization us
 }
 
 void compute_fn2(double* A, double* B, double* C) {
-  using MyVec = Vec<double, VEC_LEN>;
+  using Vector = Vec<double, VEC_LEN>;
   for (int k = 0; k < M; k++) {
-    MyVec A_ = MyVec::LoadAligned(A + k * VEC_LEN);
-    MyVec B_ = MyVec::LoadAligned(B + k * VEC_LEN);
-    MyVec C_ = MyVec::LoadAligned(C + k * VEC_LEN);
+    Vector A_ = Vector::LoadAligned(A + k * VEC_LEN);
+    Vector B_ = Vector::LoadAligned(B + k * VEC_LEN);
+    Vector C_ = Vector::LoadAligned(C + k * VEC_LEN);
     A_ = A_ * B_ + C_;
     A_.StoreAligned(A + k * VEC_LEN);
   }
