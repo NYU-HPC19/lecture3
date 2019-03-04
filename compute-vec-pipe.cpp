@@ -30,6 +30,16 @@ void compute_fn1(double* A, double* B, double* C) { // Explicit vectorization us
       _mm256_store_pd(A + k * VEC_LEN, A_);
     }
   }
+#elif defined(__SSE2__)
+  if (VEC_LEN == 4) {
+    for (int k = 0; k < 2*M; k++) {
+      __m128d A_ = _mm_load_pd(A + k * 2);
+      __m128d B_ = _mm_load_pd(B + k * 2);
+      __m128d C_ = _mm_load_pd(C + k * 2);
+      A_ = _mm_add_pd(_mm_mul_pd(A_, B_), C_);
+      _mm_store_pd(A + k * 2, A_);
+    }
+  }
 #else // if AVX instructions are not available, then fall back to regular C/C++ implementation
   for (int k = 0; k < VEC_LEN*M; k++) {
     A[k] = A[k] * B[k] + C[k];
