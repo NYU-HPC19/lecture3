@@ -66,6 +66,28 @@ void kernel_vec(long N, const double* x, const double* y, const double* z, const
     }
     _mm256_store_pd(u + trg, potential);
   }
+#elif defined(__SSE4_2__)
+  constexpr int VecLen = 2;
+  __m128d zero = _mm_set1_pd(0);
+  __m128d three = _mm_set1_pd(3);
+  __m128d half = _mm_set1_pd(0.5);
+  for (long trg = 0; trg < N; trg += VecLen) { // loop over targets
+    __m128d tx = _mm_load_pd(x + trg);
+    __m128d ty = _mm_load_pd(y + trg);
+    __m128d tz = _mm_load_pd(z + trg);
+    __m128d potential = _mm_setzero_pd();
+    for (long src = 0; src < N; src++) { // loop over sourcer
+      __m128d dx = _mm_sub_pd(tx, _mm_load1_pd(x + src));
+      __m128d dy = _mm_sub_pd(ty, _mm_load1_pd(y + src));
+      __m128d dz = _mm_sub_pd(tz, _mm_load1_pd(z + src));
+      __m128d r2 = _mm_add_pd(_mm_mul_pd(dx,dx), _mm_add_pd(_mm_mul_pd(dy,dy), _mm_mul_pd(dz,dz)));
+
+      __m128d rinv = _mm_and_pd(_mm_cmpgt_pd(r2, zero), _mm_cvtps_pd(_mm_rsqrt_ps(_mm_cvtpd_ps(r2))));
+      rinv = _mm_mul_pd(rinv, _mm_mul_pd(_mm_sub_pd(three, _mm_mul_pd(r2, _mm_mul_pd(rinv, rinv))), half)); // Newton iteration
+      potential = _mm_add_pd(potential, _mm_mul_pd(rinv, _mm_load1_pd(f + src)));
+    }
+    _mm_store_pd(u + trg, potential);
+  }
 #else
   kernel<rsqrt0>(N, x, y, z, f, u);
 #endif
@@ -125,7 +147,7 @@ int main(int argc, char** argv) {
   printf("Quake III implementation: %f cycles/eval\n", t.toc()*CLOCK_FREQ/(N*N));
 
   t.tic();
-  kernel_vec(N, x, y, z, f, u2);
+  kernel_vec_(N, x, y, z, f, u2);
   printf("Vectorized implementation: %f cycles/eval\n\n", t.toc()*CLOCK_FREQ/(N*N));
 
   double max_val = 0, max_err1 = 0, max_err2 = 0;

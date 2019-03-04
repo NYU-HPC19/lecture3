@@ -14,6 +14,9 @@
 #ifdef __SSE3__
 #include <pmmintrin.h>
 #endif
+#ifdef __SSE4_2__
+#include <smmintrin.h>
+#endif
 #ifdef __AVX__
 #include <immintrin.h>
 #endif
@@ -502,6 +505,239 @@ template <> class alignas(sizeof(double)*4) Vec<double,4> {
 template <> inline Vec<double,4> RoundReal2Real(const Vec<double,4>& x) {
   Vec<double,4> r;
   r.v = _mm256_round_pd(x.v,_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC);
+  return r;
+}
+#elif defined(__SSE4_2__)
+template <> class alignas(sizeof(double)*4) Vec<double,4> {
+  //typedef __m128d[2] VecType;
+  typedef struct VecType { __m128d x[2]; } VecType;
+  __m128d v[2];
+
+  typedef double ValueType;
+  static constexpr int N = 4;
+  public:
+
+    typedef ValueType ScalarType;
+
+    static constexpr int Size() {
+      return N;
+    }
+
+    static Vec Zero() {
+      Vec r;
+      r.v[0] = _mm_setzero_pd();
+      r.v[1] = _mm_setzero_pd();
+      return r;
+    }
+
+    static Vec Load1(ValueType const* p) {
+      Vec r;
+      r.v[0] = _mm_load1_pd(p);
+      r.v[1] = _mm_load1_pd(p);
+      return r;
+    }
+    static Vec Load(ValueType const* p) {
+      Vec r;
+      r.v[0] = _mm_loadu_pd(p+0);
+      r.v[1] = _mm_loadu_pd(p+2);
+      return r;
+    }
+    static Vec LoadAligned(ValueType const* p) {
+      Vec r;
+      r.v[0] = _mm_load_pd(p+0);
+      r.v[1] = _mm_load_pd(p+2);
+      return r;
+    }
+
+    Vec() {}
+
+    Vec(const ValueType& a) {
+      v[0] = _mm_set1_pd(a);
+      v[1] = _mm_set1_pd(a);
+    }
+
+    void Store(ValueType* p) const {
+      _mm_storeu_pd(p+0, v[0]);
+      _mm_storeu_pd(p+2, v[1]);
+    }
+    void StoreAligned(ValueType* p) const {
+      _mm_store_pd(p+0, v[0]);
+      _mm_store_pd(p+2, v[1]);
+    }
+
+    // Bitwise NOT
+    Vec operator~() const {
+      Vec r;
+      static constexpr ScalarType Creal = -1.0;
+      r.v[0] = _mm_xor_pd(v[0], _mm_set1_pd(Creal));
+      r.v[1] = _mm_xor_pd(v[1], _mm_set1_pd(Creal));
+      return r;
+    }
+
+    // Unary plus and minus
+    Vec operator+() const {
+      return *this;
+    }
+    Vec operator-() const {
+      return Zero() - (*this);
+    }
+
+    // C-style cast
+    template <class RetValueType> explicit operator Vec<RetValueType,N>() const {
+      Vec<RetValueType,N> r;
+      VecType& ret_v = *(VecType*)&r.v;
+      ret_v = v;
+      return r;
+    }
+
+    // Arithmetic operators
+    friend Vec operator*(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_mul_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_mul_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator+(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_add_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_add_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator-(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_sub_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_sub_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec FMA(Vec a, const Vec& b, const Vec& c) {
+      a.v[0] = _mm_add_pd(_mm_mul_pd(a.v[0], b.v[0]), c.v[0]);
+      a.v[1] = _mm_add_pd(_mm_mul_pd(a.v[1], b.v[1]), c.v[1]);
+      return a;
+    }
+
+    // Comparison operators
+    friend Vec operator< (Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmplt_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmplt_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator<=(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmple_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmple_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator>=(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmpge_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmpge_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator> (Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmpgt_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmpgt_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator==(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmpeq_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmpeq_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator!=(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_cmpneq_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_cmpneq_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+
+    // Bitwise operators
+    friend Vec operator&(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_and_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_and_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator^(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_xor_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_xor_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec operator|(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_or_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_or_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec AndNot(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_andnot_pd(rhs.v[0], lhs.v[0]);
+      lhs.v[1] = _mm_andnot_pd(rhs.v[1], lhs.v[1]);
+      return lhs;
+    }
+
+    // Assignment operators
+    Vec& operator*=(const Vec& rhs) {
+      v[0] = _mm_mul_pd(v[0], rhs.v[0]);
+      v[1] = _mm_mul_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+    Vec& operator+=(const Vec& rhs) {
+      v[0] = _mm_add_pd(v[0], rhs.v[0]);
+      v[1] = _mm_add_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+    Vec& operator-=(const Vec& rhs) {
+      v[0] = _mm_sub_pd(v[0], rhs.v[0]);
+      v[1] = _mm_sub_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+    Vec& operator&=(const Vec& rhs) {
+      v[0] = _mm_and_pd(v[0], rhs.v[0]);
+      v[1] = _mm_and_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+    Vec& operator^=(const Vec& rhs) {
+      v[0] = _mm_xor_pd(v[0], rhs.v[0]);
+      v[1] = _mm_xor_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+    Vec& operator|=(const Vec& rhs) {
+      v[0] = _mm_or_pd(v[0], rhs.v[0]);
+      v[1] = _mm_or_pd(v[1], rhs.v[1]);
+      return *this;
+    }
+
+    // Other operators
+    friend Vec max(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_max_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_max_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+    friend Vec min(Vec lhs, const Vec& rhs) {
+      lhs.v[0] = _mm_min_pd(lhs.v[0], rhs.v[0]);
+      lhs.v[1] = _mm_min_pd(lhs.v[1], rhs.v[1]);
+      return lhs;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Vec& in) {
+      union {
+        VecType vec;
+        ValueType val[N];
+      };
+      vec.x[0] = in.v[0];
+      vec.x[1] = in.v[1];
+      for (int i = 0; i < N; i++) os << val[i] << ' ';
+      return os;
+    }
+    friend Vec approx_rsqrt(const Vec& x) {
+      Vec r;
+      r.v[0] = _mm_cvtps_pd(_mm_rsqrt_ps(_mm_cvtpd_ps(x.v[0])));
+      r.v[1] = _mm_cvtps_pd(_mm_rsqrt_ps(_mm_cvtpd_ps(x.v[1])));
+      return r;
+    }
+
+    template <class Vec> friend Vec RoundReal2Real(const Vec& x);
+    template <class Vec> friend void sincos_intrin(Vec& sinx, Vec& cosx, const Vec& x);
+
+  private:
+
+};
+
+template <> inline Vec<double,4> RoundReal2Real(const Vec<double,4>& x) {
+  Vec<double,4> r;
+  r.v[0] = _mm_round_pd(x.v[0],_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC);
+  r.v[1] = _mm_round_pd(x.v[1],_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC);
   return r;
 }
 #endif
